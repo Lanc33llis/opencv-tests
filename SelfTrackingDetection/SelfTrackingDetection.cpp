@@ -6,7 +6,7 @@
 #include <opencv2/imgproc.hpp>
 using namespace std;
 using namespace cv;
-int LowH = 0, LowS = 0, LowV = 7, HighH = 179, HighS = 255, HighV = 73, mX = 0, mY = 0;
+int LowH = 0, LowS = 0, LowV = 7, HighH = 179, HighS = 255, HighV = 73, mX = 0, mY = 0, boxwidth = 0, boxheight = 0;
 vector<vector<Point>> _contours;
 vector<vector<Point>> squares; 
 vector<Point> approx;
@@ -15,6 +15,11 @@ TrackerKCF::MODE(GREY);
 Ptr<Tracker> tracker = TrackerKCF::create();
 vector<Vec4i> hierarchy;
 Rect2d trackingbox;
+Mat VideoFrame;
+Mat VideoFrameThresholded;
+Mat VideoTracked;
+Mat VideoHSV;
+Rect2d bbox;
 bool spressed = false;
 
 
@@ -41,16 +46,15 @@ void findHSV(int event, int x, int y, int flags, void* userdata)
 	{
 		cout << "Left button of the mouse is clicked - position (" << mX << ", " << mY << ")" << endl;
 		mX = x, mY = y;
+		Vec3b color = VideoHSV.at<Vec3b>(Point(mX, mY));
+		HighH = (color.val[0] + 100), HighS = (color.val[1] + 100), HighV = (color.val[2] + 100), LowH = (color.val[0] - 100), LowS = (color.val[1] - 100), LowV = (color.val[2] - 100);
 	}
 }
 
 int main()
 {
 	VideoCapture Video(/*"D:/frc tracking test.mp4"*/ 0 );
-	Mat VideoFrame;
-	Mat VideoFrameThresholded;
-	Mat VideoTracked;
-	Mat VideoHSV;
+	bool dpressed = false; 
 	namedWindow("Control", WINDOW_AUTOSIZE);
 	createTrackbar("LowH", "Control", &LowH, 179);
 	createTrackbar("LowS", "Control", &LowS, 255);
@@ -58,7 +62,7 @@ int main()
 	createTrackbar("HighH", "Control", &HighH, 179);
 	createTrackbar("HighS", "Control", &HighS, 255);
 	createTrackbar("HighV", "Control", &HighV, 255);
-	Rect2d bbox(500, 400, 500, 400);
+	/*Rect2d bbox(Point (100, 100), Point (50, 50));*/
 	Video.read(VideoFrame);
 	VideoTracked = VideoFrame.clone();
 	VideoFrameThresholded = VideoFrame.clone();
@@ -82,7 +86,7 @@ int main()
 		dilate(VideoFrameThresholded, VideoFrameThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 		dilate(VideoFrameThresholded, VideoFrameThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
 		erode(VideoFrameThresholded, VideoFrameThresholded, getStructuringElement(MORPH_ELLIPSE, Size(5, 5)));
-		GaussianBlur(VideoFrameThresholded, VideoFrameThresholded, Size(3, 3), 0, 0, BORDER_CONSTANT);
+		//GaussianBlur(VideoFrameThresholded, VideoFrameThresholded, Size(3, 3), 0, 0, BORDER_CONSTANT);
 		VideoTracked = VideoFrame.clone();
 		findContours(VideoFrameThresholded, _contours, hierarchy, RETR_CCOMP, CHAIN_APPROX_SIMPLE);
 		drawContours(VideoContours, _contours, -1, Scalar(0, 255, 0), 3, LINE_AA, hierarchy, 3);
@@ -116,6 +120,21 @@ int main()
 		//circle(VideoApprox, point, 3, Scalar(255, 0, 0), 3, 8, 0);
 		VideoTracked.setTo(Scalar(0, 0, 0), ~VideoFrameThresholded);
 		VideoTracked.setTo(Scalar(255, 255, 255), VideoFrameThresholded);
+		if (waitKey(1) == 113)
+		{
+			boxwidth = (approx[1].x - approx[2].x);
+			boxheight = (approx[1].y - approx[3].y);
+		}
+		if (waitKey(1) == 100)
+		{
+			dpressed = true;
+			bbox = Rect2d(approx[1], approx[3]);
+			cout << "drew box" << endl;
+		}
+		if (dpressed == true)
+		{
+			bbox = Rect2d(approx[1], approx[3]);
+		}
 		if (waitKey(1) == 116)
 		{
 			if (tpressed == false)
@@ -130,14 +149,13 @@ int main()
 			tracker->update(VideoTracked, bbox);
 			rectangle(VideoTracked, bbox, Scalar(255, 0, 0), 2, 1);
 		}
-
 		if (waitKey(1) == 115)
 		{
 			spressed = true;
 		}
 		setMouseCallback("Video HSV", findHSV, NULL);
-		Vec3b color = VideoHSV.at<Vec3b>(Point(mX, mY));
-		HighH = (color.val[0] + 5), HighS = (color.val[1] + 5), HighV = (color.val[2] + 5), LowH = (color.val[0] - 5), LowS = (color.val[1] - 5), LowV = (color.val[2] - 5);
+		
+
 		imshow("Original", VideoFrame);
 		imshow("Video HSV", VideoHSV);
 		imshow("Thresholded", VideoFrameThresholded);
